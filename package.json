@@ -1,0 +1,6 @@
+{
+  "name": "route-to-gpx",
+  "version": "1.0.0",
+  "description": "Convert Google Maps routes to GPX files for Wahoo bike computers",
+  "private": true
+}
