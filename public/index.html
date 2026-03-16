@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Route → GPX</title>
-    <meta name="description" content="Convert Google Maps routes to GPX files for your Wahoo bike computer">
+    <meta name="description" content="Convert Google Maps routes to GPX files for any bike computer">
     <meta name="theme-color" content="#0f0f14">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
@@ -23,7 +23,6 @@
             --text-hint: #8080a0;
             --accent: #22dda6;
             --accent-glow: rgba(34, 221, 166, 0.15);
-            --accent-dark: #1ab88a;
             --warn: #ffb347;
             --error: #ff6b7a;
             --radius: 16px;
@@ -44,9 +43,7 @@
 
         .header {
             padding: 24px 20px 0;
-            display: flex;
-            align-items: center;
-            gap: 14px;
+            display: flex; align-items: center; gap: 14px;
             margin-bottom: 10px;
         }
 
@@ -69,10 +66,8 @@
         h1 span { color: var(--accent); }
 
         .tagline {
-            padding: 0 20px;
-            color: var(--text-dim);
-            font-size: 1rem;
-            margin-bottom: 28px;
+            padding: 0 20px; color: var(--text-dim);
+            font-size: 1rem; margin-bottom: 28px;
         }
 
         .card {
@@ -87,8 +82,7 @@
             font-family: 'IBM Plex Mono', monospace;
             font-size: 0.75rem; font-weight: 600;
             text-transform: uppercase; letter-spacing: 0.12em;
-            color: var(--text-dim);
-            margin-bottom: 16px;
+            color: var(--text-dim); margin-bottom: 16px;
             display: flex; align-items: center; gap: 8px;
         }
 
@@ -97,7 +91,7 @@
             border-radius: 50%; background: var(--accent); opacity: 0.6;
         }
 
-        input[type="text"], textarea {
+        textarea {
             width: 100%; padding: 16px 18px;
             background: var(--bg);
             border: 1.5px solid var(--surface-3);
@@ -105,56 +99,21 @@
             color: var(--text);
             font-family: 'IBM Plex Mono', monospace;
             font-size: 0.95rem; line-height: 1.5;
-            outline: none;
+            outline: none; resize: none; height: 90px;
             transition: border-color 0.2s, box-shadow 0.2s;
             -webkit-appearance: none;
         }
 
-        input:focus, textarea:focus {
+        textarea:focus {
             border-color: var(--accent);
             box-shadow: 0 0 0 3px var(--accent-glow);
         }
 
-        input::placeholder, textarea::placeholder { color: var(--surface-3); font-size: 0.9rem; }
-
-        textarea { resize: none; height: 90px; }
+        textarea::placeholder { color: var(--surface-3); font-size: 0.9rem; }
 
         .input-hint {
             font-size: 0.85rem; color: var(--text-hint);
             margin-top: 10px; line-height: 1.6;
-        }
-
-        .input-hint a { color: var(--accent); }
-        .input-hint strong { color: var(--text); font-weight: 500; }
-
-        .api-section { margin-top: 4px; }
-
-        .api-toggle {
-            background: none; border: none;
-            color: var(--accent);
-            font-family: 'Outfit', sans-serif;
-            font-size: 1rem; font-weight: 500;
-            cursor: pointer; padding: 6px 0;
-            display: flex; align-items: center; gap: 8px;
-        }
-
-        .api-toggle .chevron { transition: transform 0.2s; font-size: 0.8rem; }
-        .api-toggle.open .chevron { transform: rotate(90deg); }
-
-        .api-fields { display: none; margin-top: 16px; }
-        .api-fields.visible { display: block; }
-
-        .api-saved-badge {
-            display: inline-flex; align-items: center; gap: 6px;
-            font-size: 0.9rem; color: var(--accent);
-        }
-
-        .api-change-btn {
-            background: none; border: none;
-            color: var(--text-dim);
-            font-family: 'Outfit', sans-serif;
-            font-size: 0.85rem; cursor: pointer;
-            margin-left: 10px; text-decoration: underline;
         }
 
         .mode-row { display: flex; gap: 10px; margin-top: 14px; }
@@ -276,7 +235,7 @@
         .step-text { font-size: 1rem; color: var(--text-dim); line-height: 1.5; padding-top: 4px; }
         .step-text strong { color: var(--text); font-weight: 500; }
 
-        .wahoo-tip {
+        .tip {
             margin: 16px 12px 0; padding: 16px 18px;
             background: #1a1a24;
             border: 1px dashed var(--surface-3);
@@ -284,7 +243,7 @@
             font-size: 0.95rem; color: var(--text-dim); line-height: 1.6;
         }
 
-        .wahoo-tip strong { color: var(--warn); font-weight: 500; }
+        .tip strong { color: var(--warn); font-weight: 500; }
     </style>
 </head>
 <body>
@@ -296,29 +255,7 @@
         </div>
         <h1>Route <span>→</span> GPX</h1>
     </div>
-    <p class="tagline">Paste a Google Maps link, get a GPX file for your Wahoo.</p>
-
-    <div class="card" id="apiCard">
-        <div class="card-label">Google API Key</div>
-        <div class="api-section">
-            <div id="apiStatus">
-                <button class="api-toggle" id="apiToggle" onclick="toggleApiFields()">
-                    <span class="chevron">▶</span> Set up API key
-                </button>
-            </div>
-            <div class="api-fields" id="apiFields">
-                <input type="text" id="apiKey" placeholder="AIza..." autocomplete="off" spellcheck="false">
-                <div class="input-hint">
-                    Needed to fetch route data from Google. Your key is saved on your phone only.
-                    <br><br>
-                    <strong>Quick setup:</strong> Go to
-                    <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a>,
-                    create a project, enable the <strong>Directions API</strong> and <strong>Maps JavaScript API</strong>, create an API key, and paste it above.
-                </div>
-                <button class="btn btn-convert" style="margin-top:16px; font-size:1rem; padding:14px;" onclick="saveApiKey()">Save key</button>
-            </div>
-        </div>
-    </div>
+    <p class="tagline">Paste a Google Maps link, get a GPX file for your bike computer.</p>
 
     <div class="card">
         <div class="card-label">Google Maps Route</div>
@@ -357,20 +294,20 @@
                 <div class="stat-label">points</div>
             </div>
         </div>
-        <button class="btn btn-primary" id="shareBtn" onclick="shareGPX()">
+        <button class="btn btn-primary" onclick="shareGPX()">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
                 <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
             </svg>
-            Open in Wahoo app
+            Share GPX file
         </button>
-        <button class="btn btn-secondary" id="downloadBtn" onclick="downloadGPX()">
+        <button class="btn btn-secondary" onclick="downloadGPX()">
             Save GPX to Downloads
         </button>
     </div>
 
-    <div class="wahoo-tip" id="wahooTip" style="display:none;">
-        <strong>Tip:</strong> "Open in Wahoo" uses Android's share sheet — pick the Wahoo app and it imports directly. If that doesn't work, use "Save GPX to Downloads" then open the Wahoo app → Explore → My Collection → My Routes → (+) → Import a file.
+    <div class="tip" id="tip" style="display:none;">
+        <strong>Tip:</strong> "Share GPX" opens your phone's share sheet — pick the Wahoo app, Garmin Connect, or any GPS app to import the route directly. Or use "Save to Downloads" and open the file manually.
     </div>
 
     <div class="howto" style="margin-top: 24px;">
@@ -385,80 +322,21 @@
         </div>
         <div class="step">
             <div class="step-num">3</div>
-            <div class="step-text"><strong>Convert</strong> and download the GPX file</div>
-        </div>
-        <div class="step">
-            <div class="step-num">4</div>
-            <div class="step-text"><strong>Open in Wahoo app</strong> — it syncs to your ELEMNT via Bluetooth</div>
+            <div class="step-text"><strong>Convert</strong> and tap Share to send to your bike computer app</div>
         </div>
     </div>
 
     <script>
-        let apiKeyValue = '';
         let travelMode = 'BICYCLING';
         let gpxContent = '';
         let gpxFilename = '';
-        let mapsApiLoaded = false;
 
         const urlInput = document.getElementById('mapsUrl');
         const convertBtn = document.getElementById('convertBtn');
 
         urlInput.addEventListener('input', () => {
-            convertBtn.disabled = !urlInput.value.trim() || !apiKeyValue;
-        });
-
-        // Load saved API key from localStorage on startup
-        (function loadSavedKey() {
-            const saved = localStorage.getItem('routeToGpx_apiKey');
-            if (saved) {
-                apiKeyValue = saved;
-                document.getElementById('apiStatus').innerHTML =
-                    '<span class="api-saved-badge">✓ API key saved</span>' +
-                    '<button class="api-change-btn" onclick="changeApiKey()">change</button>';
-                document.getElementById('apiFields').classList.remove('visible');
-                loadMapsApi(saved);
-            }
-        })();
-
-        function toggleApiFields() {
-            const fields = document.getElementById('apiFields');
-            const toggle = document.getElementById('apiToggle');
-            const visible = fields.classList.toggle('visible');
-            toggle.classList.toggle('open', visible);
-        }
-
-        function saveApiKey() {
-            const key = document.getElementById('apiKey').value.trim();
-            if (!key) return;
-            apiKeyValue = key;
-            localStorage.setItem('routeToGpx_apiKey', key);
-            document.getElementById('apiStatus').innerHTML =
-                '<span class="api-saved-badge">✓ API key saved</span>' +
-                '<button class="api-change-btn" onclick="changeApiKey()">change</button>';
-            document.getElementById('apiFields').classList.remove('visible');
             convertBtn.disabled = !urlInput.value.trim();
-            loadMapsApi(key);
-        }
-
-        function changeApiKey() {
-            document.getElementById('apiStatus').innerHTML =
-                '<button class="api-toggle open" onclick="toggleApiFields()">' +
-                '<span class="chevron" style="transform:rotate(90deg)">▶</span> Set up API key</button>';
-            document.getElementById('apiFields').classList.add('visible');
-            document.getElementById('apiKey').value = apiKeyValue;
-        }
-
-        function loadMapsApi(key) {
-            if (mapsApiLoaded) return;
-            const script = document.createElement('script');
-            script.src = `https://maps.googleapis.com/maps/api/js?key=${key}`;
-            script.onload = () => { mapsApiLoaded = true; };
-            script.onerror = () => {
-                showStatus('Failed to load Google Maps API. Check your key.', 'error');
-                mapsApiLoaded = false;
-            };
-            document.head.appendChild(script);
-        }
+        });
 
         function setMode(btn) {
             document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
@@ -466,7 +344,7 @@
             travelMode = btn.dataset.mode;
         }
 
-        // Resolve shortened Google Maps URLs via our serverless function
+        // Resolve shortened Google Maps URLs via serverless function
         async function resolveShortUrl(url) {
             showStatus('Resolving shortened URL...', 'loading');
             const resp = await fetch(`/api/resolve-url?url=${encodeURIComponent(url)}`);
@@ -512,57 +390,23 @@
             return null;
         }
 
-        function getRoute(parsed) {
-            return new Promise((resolve, reject) => {
-                if (!window.google || !window.google.maps) {
-                    reject(new Error('Google Maps API not loaded. Check your API key.'));
-                    return;
-                }
-
-                const service = new google.maps.DirectionsService();
-                const request = {
-                    origin: parsed.origin,
-                    destination: parsed.destination,
-                    travelMode: google.maps.TravelMode[travelMode],
-                    unitSystem: google.maps.UnitSystem.METRIC
-                };
-
-                if (parsed.waypoints.length > 0) {
-                    request.waypoints = parsed.waypoints.map(w => ({ location: w, stopover: true }));
-                }
-
-                service.route(request, (result, status) => {
-                    if (status === 'OK') {
-                        const points = [];
-                        let totalDist = 0, totalDur = 0;
-
-                        result.routes[0].legs.forEach(leg => {
-                            totalDist += leg.distance.value;
-                            totalDur += leg.duration.value;
-                            leg.steps.forEach(step => {
-                                (step.path || step.lat_lngs || []).forEach(pt => {
-                                    points.push({ lat: pt.lat(), lng: pt.lng() });
-                                });
-                            });
-                        });
-
-                        if (points.length === 0 && result.routes[0].overview_path) {
-                            result.routes[0].overview_path.forEach(pt => {
-                                points.push({ lat: pt.lat(), lng: pt.lng() });
-                            });
-                        }
-
-                        resolve({ points, distanceMeters: totalDist, durationSeconds: totalDur });
-                    } else {
-                        const msgs = {
-                            REQUEST_DENIED: 'API key issue — make sure Directions API is enabled in Google Cloud Console.',
-                            ZERO_RESULTS: 'No cycling route found between those locations.',
-                            NOT_FOUND: 'Could not find one of the locations. Try a different URL.'
-                        };
-                        reject(new Error(msgs[status] || 'Route calculation failed: ' + status));
-                    }
-                });
+        // Get route from our server-side API (no client API key needed)
+        async function getRoute(parsed) {
+            const params = new URLSearchParams({
+                origin: parsed.origin,
+                destination: parsed.destination,
+                mode: travelMode
             });
+
+            if (parsed.waypoints.length > 0) {
+                params.set('waypoints', parsed.waypoints.join('|'));
+            }
+
+            const resp = await fetch(`/api/directions?${params.toString()}`);
+            const data = await resp.json();
+
+            if (data.error) throw new Error(data.error);
+            return data;
         }
 
         function buildGPX(routeData, routeName) {
@@ -582,10 +426,10 @@
 
         async function convert() {
             let url = urlInput.value.trim();
-            if (!url || !apiKeyValue) return;
+            if (!url) return;
             convertBtn.disabled = true;
 
-            // Auto-resolve shortened URLs via serverless function
+            // Auto-resolve shortened URLs
             if (url.includes('goo.gl') || url.includes('maps.app')) {
                 try {
                     url = await resolveShortUrl(url);
@@ -607,7 +451,8 @@
 
             try {
                 const routeData = await getRoute(parsed);
-                if (routeData.points.length === 0) {
+
+                if (!routeData.points || routeData.points.length === 0) {
                     showStatus('Route returned but contained no path data.', 'error');
                     convertBtn.disabled = false;
                     return;
@@ -627,7 +472,7 @@
                 document.getElementById('statDur').textContent = durStr;
                 document.getElementById('statPts').textContent = routeData.points.length.toLocaleString();
                 document.getElementById('resultSection').classList.add('show');
-                document.getElementById('wahooTip').style.display = '';
+                document.getElementById('tip').style.display = '';
 
                 showStatus(`Route converted — ${routeData.points.length.toLocaleString()} points, ${distKm} km`, 'success');
             } catch (err) {
@@ -638,9 +483,8 @@
 
         function downloadGPX() {
             if (!gpxContent) return;
-            const blob = new Blob([gpxContent], { type: 'application/gpx+xml' });
             const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
+            a.href = URL.createObjectURL(new Blob([gpxContent], { type: 'application/gpx+xml' }));
             a.download = gpxFilename;
             document.body.appendChild(a);
             a.click();
@@ -663,7 +507,7 @@
                 }
             }
             downloadGPX();
-            showStatus('File saved to Downloads. Open it from your file manager → choose Wahoo app.', 'success');
+            showStatus('File saved to Downloads. Open it from your file manager → choose your bike computer app.', 'success');
         }
 
         function showStatus(msg, type) {
