@@ -822,27 +822,33 @@
         async function shareGPX() {
             if (!gpxContent) return;
 
-            // Try Web Share API with file (requires HTTPS)
-            if (navigator.share) {
-                try {
-                    const file = new File([gpxContent], gpxFilename, { type: 'application/xml' });
-                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                        await navigator.share({ files: [file] });
-                        return;
+            // Try Web Share API with file (requires HTTPS + Android Chrome)
+            if (navigator.share && navigator.canShare) {
+                // Try different MIME types — Android can be picky
+                const mimeTypes = [
+                    'application/gpx+xml',
+                    'application/xml',
+                    'application/octet-stream',
+                    'text/xml'
+                ];
+
+                for (const mime of mimeTypes) {
+                    try {
+                        const file = new File([gpxContent], gpxFilename, { type: mime });
+                        if (navigator.canShare({ files: [file] })) {
+                            await navigator.share({ files: [file] });
+                            return; // Success — user picked an app
+                        }
+                    } catch (err) {
+                        if (err.name === 'AbortError') return; // User cancelled
+                        // Try next MIME type
                     }
-                } catch (err) {
-                    if (err.name === 'AbortError') return;
-                    // Fall through to intent approach
                 }
             }
 
-            // Fallback: create a blob URL and try to open it, which on Android
-            // triggers "Open with..." including the Wahoo app
-            const blob = new Blob([gpxContent], { type: 'application/xml' });
-            const url = URL.createObjectURL(blob);
-            window.open(url, '_blank');
-            showStatus('If the Wahoo app didn\'t open: tap Download GPX instead, then find the file in your Downloads and tap it → choose Wahoo.', 'success');
-            setTimeout(() => URL.revokeObjectURL(url), 10000);
+            // Fallback: download the file, then tell user to open it
+            downloadGPX();
+            showStatus('File saved to Downloads. Open your file manager → find the .gpx file → tap it → choose Wahoo app to import.', 'success');
         }
 
         // ─── Helpers ───
