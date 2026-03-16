@@ -270,6 +270,7 @@ let travelMode = 'BICYCLING';
 let gpxContent = '';
 let gpxFilename = '';
 let currentRoute = null; // { points, distanceMeters, durationSeconds, legs }
+let currentElevations = null; // array of elevation per point
 let currentMapsUrl = '';
 let leafletMap = null;
 let routeLayer = null;
@@ -354,32 +355,19 @@ async function getElevation(points) {
 }
 
 // ─── GPX building ───
-function buildGPX(points, name, elevations) {
+function buildGPX(points, name, elevationArray) {
     const ts = new Date().toISOString();
     const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-
-    // If we have elevations, create a map from sampled points to elevation
-    let elevMap = null;
-    if (elevations && elevations.length > 0) {
-        elevMap = new Map();
-        for (const e of elevations) {
-            elevMap.set(`${e.lat.toFixed(4)},${e.lng.toFixed(4)}`, e.elevation);
-        }
-    }
 
     let gpx = `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="RouteToGPX" xmlns="http://www.topografix.com/GPX/1/1">
 <metadata><name>${esc(name)}</name><time>${ts}</time></metadata>
 <trk><name>${esc(name)}</name><trkseg>
 `;
-    for (const pt of points) {
-        // Try to find nearest elevation
-        let eleAttr = '';
-        if (elevMap) {
-            const key = `${pt.lat.toFixed(4)},${pt.lng.toFixed(4)}`;
-            if (elevMap.has(key)) eleAttr = `<ele>${elevMap.get(key)}</ele>`;
-        }
-        gpx += `<trkpt lat="${pt.lat.toFixed(7)}" lon="${pt.lng.toFixed(7)}">${eleAttr}</trkpt>\n`;
+    for (let i = 0; i < points.length; i++) {
+        const pt = points[i];
+        const ele = (elevationArray && i < elevationArray.length) ? `<ele>${elevationArray[i]}</ele>` : '';
+        gpx += `<trkpt lat="${pt.lat.toFixed(7)}" lon="${pt.lng.toFixed(7)}">${ele}</trkpt>\n`;
     }
     gpx += `</trkseg></trk>\n</gpx>`;
     return gpx;
@@ -493,6 +481,7 @@ async function convert() {
         }
 
         currentRoute = routeData;
+        currentElevations = null;
 
         const originShort = parsed.origin.split(',')[0].substring(0, 25).replace(/[^a-zA-Z0-9 ]/g, '').trim();
         const destShort = parsed.destination.split(',')[0].substring(0, 25).replace(/[^a-zA-Z0-9 ]/g, '').trim();
@@ -527,8 +516,9 @@ async function convert() {
             document.getElementById('statAsc').textContent = elev.ascent;
             document.getElementById('statDesc').textContent = elev.descent;
             drawElevation(elev.profile, elev.ascent, elev.descent, elev.minElevation, elev.maxElevation);
-            // Rebuild GPX with elevation data
-            updateGPX(elev.elevations);
+            // Store elevation data and rebuild GPX
+            currentElevations = elev.allPointElevations;
+            updateGPX();
         } catch (elevErr) {
             document.getElementById('elevLoading').textContent = 'Elevation data unavailable';
             document.getElementById('statAsc').textContent = '—';
@@ -544,11 +534,11 @@ async function convert() {
     convertBtn.disabled = false;
 }
 
-function updateGPX(elevations) {
+function updateGPX() {
     if (!currentRoute) return;
     const name = document.getElementById('routeName').value || 'Route';
     gpxFilename = name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '') + '.gpx';
-    gpxContent = buildGPX(currentRoute.points, name, elevations);
+    gpxContent = buildGPX(currentRoute.points, name, currentElevations);
 }
 
 // Update GPX when name changes
@@ -558,6 +548,7 @@ document.getElementById('routeName').addEventListener('input', () => updateGPX()
 function reverseRoute() {
     if (!currentRoute) return;
     currentRoute.points.reverse();
+    if (currentElevations) currentElevations.reverse();
     updateGPX();
     showMap(currentRoute.points, currentRoute.legs);
     // Re-fetch elevation for reversed route
@@ -568,7 +559,8 @@ function reverseRoute() {
         document.getElementById('statAsc').textContent = elev.ascent;
         document.getElementById('statDesc').textContent = elev.descent;
         drawElevation(elev.profile, elev.ascent, elev.descent, elev.minElevation, elev.maxElevation);
-        updateGPX(elev.elevations);
+        currentElevations = elev.allPointElevations;
+        updateGPX();
     }).catch(() => {});
     showStatus('Route reversed!', 'success');
 }
@@ -576,7 +568,6 @@ function reverseRoute() {
 // ─── Download / Share ───
 function downloadGPX() {
     if (!gpxContent) return;
-    updateGPX();
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([gpxContent], { type: 'application/gpx+xml' }));
     a.download = gpxFilename;

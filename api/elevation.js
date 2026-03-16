@@ -1,74 +1,108 @@
 export default async function handler(req, res) {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'API key not configured' });
-
-  // Accept POST with points array
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'POST required' });
-  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST required' });
 
   try {
     const { points } = req.body;
-    if (!points || !points.length) {
-      return res.status(400).json({ error: 'No points provided' });
-    }
+    if (!points || !points.length) return res.status(400).json({ error: 'No points provided' });
 
-    // Sample up to 100 points evenly along the route
-    const maxSamples = 100;
-    const sampled = [];
+    // Sample up to 200 points evenly for better interpolation accuracy
+    const maxSamples = 200;
+    const sampleIndices = [];
     if (points.length <= maxSamples) {
-      sampled.push(...points);
+      for (let i = 0; i < points.length; i++) sampleIndices.push(i);
     } else {
       const step = (points.length - 1) / (maxSamples - 1);
-      for (let i = 0; i < maxSamples; i++) {
-        sampled.push(points[Math.round(i * step)]);
+      for (let i = 0; i < maxSamples; i++) sampleIndices.push(Math.round(i * step));
+    }
+
+    const sampled = sampleIndices.map(i => points[i]);
+    const locations = sampled.map(p => `${p.lat},${p.lng}`).join('|');
+
+    // Google Elevation API - may need multiple calls if >512 locations
+    const batchSize = 512;
+    let allElevations = [];
+
+    for (let b = 0; b < sampled.length; b += batchSize) {
+      const batch = sampled.slice(b, b + batchSize);
+      const locs = batch.map(p => `${p.lat},${p.lng}`).join('|');
+      const url = `https://maps.googleapis.com/maps/api/elevation/json?locations=${encodeURIComponent(locs)}&key=${apiKey}`;
+      const resp = await fetch(url);
+      const data = await resp.json();
+      if (data.status !== 'OK') {
+        return res.status(400).json({ error: 'Elevation API error: ' + data.status });
+      }
+      allElevations.push(...data.results.map(r => Math.round(r.elevation)));
+    }
+
+    // Calculate cumulative distance for ALL original points
+    const cumDists = [0];
+    for (let i = 1; i < points.length; i++) {
+      cumDists.push(cumDists[i - 1] + haversine(
+        points[i - 1].lat, points[i - 1].lng,
+        points[i].lat, points[i].lng
+      ));
+    }
+
+    // Build sample table: index in original array -> elevation
+    const sampleTable = sampleIndices.map((origIdx, i) => ({
+      origIdx,
+      cumDist: cumDists[origIdx],
+      elevation: allElevations[i]
+    }));
+
+    // Interpolate elevation for EVERY point in the original array
+    const allPointElevations = [];
+    let si = 0; // current position in sampleTable
+
+    for (let i = 0; i < points.length; i++) {
+      const dist = cumDists[i];
+
+      // Advance sample pointer
+      while (si < sampleTable.length - 1 && sampleTable[si + 1].cumDist < dist) si++;
+
+      if (si >= sampleTable.length - 1) {
+        allPointElevations.push(sampleTable[sampleTable.length - 1].elevation);
+      } else if (sampleTable[si].cumDist >= dist) {
+        allPointElevations.push(sampleTable[si].elevation);
+      } else {
+        // Linear interpolation between sample[si] and sample[si+1]
+        const d0 = sampleTable[si].cumDist;
+        const d1 = sampleTable[si + 1].cumDist;
+        const e0 = sampleTable[si].elevation;
+        const e1 = sampleTable[si + 1].elevation;
+        const frac = (d1 - d0) > 0 ? (dist - d0) / (d1 - d0) : 0;
+        allPointElevations.push(Math.round(e0 + frac * (e1 - e0)));
       }
     }
 
-    // Google Elevation API accepts up to 512 locations per request
-    // With 100 samples we're well within limits
-    const locations = sampled.map(p => `${p.lat},${p.lng}`).join('|');
-    const url = `https://maps.googleapis.com/maps/api/elevation/json?locations=${encodeURIComponent(locations)}&key=${apiKey}`;
-    const resp = await fetch(url);
-    const data = await resp.json();
-
-    if (data.status !== 'OK') {
-      return res.status(400).json({ error: 'Elevation API error: ' + data.status });
-    }
-
-    const elevations = data.results.map((r, i) => ({
-      lat: sampled[i].lat,
-      lng: sampled[i].lng,
-      elevation: Math.round(r.elevation)
+    // Build profile from sampled points (for the chart)
+    const profile = sampleTable.map(s => ({
+      distance: Math.round(s.cumDist),
+      elevation: s.elevation
     }));
 
-    // Calculate cumulative distance for each sample point
-    let cumDist = 0;
-    const profile = [{ distance: 0, elevation: elevations[0].elevation }];
-    for (let i = 1; i < elevations.length; i++) {
-      cumDist += haversine(
-        elevations[i - 1].lat, elevations[i - 1].lng,
-        elevations[i].lat, elevations[i].lng
-      );
-      profile.push({ distance: Math.round(cumDist), elevation: elevations[i].elevation });
-    }
-
-    // Calculate total ascent/descent
+    // Calculate ascent/descent from the interpolated data
     let ascent = 0, descent = 0;
-    for (let i = 1; i < elevations.length; i++) {
-      const diff = elevations[i].elevation - elevations[i - 1].elevation;
+    // Use sampled points to avoid noise from interpolation
+    for (let i = 1; i < sampleTable.length; i++) {
+      const diff = sampleTable[i].elevation - sampleTable[i - 1].elevation;
       if (diff > 0) ascent += diff;
       else descent += Math.abs(diff);
     }
 
+    const minElev = Math.min(...allElevations);
+    const maxElev = Math.max(...allElevations);
+
     res.setHeader('Access-Control-Allow-Origin', '*');
     return res.status(200).json({
       profile,
+      allPointElevations,
       ascent: Math.round(ascent),
       descent: Math.round(descent),
-      minElevation: Math.min(...elevations.map(e => e.elevation)),
-      maxElevation: Math.max(...elevations.map(e => e.elevation)),
-      elevations
+      minElevation: minElev,
+      maxElevation: maxElev
     });
   } catch (err) {
     return res.status(500).json({ error: 'Server error: ' + err.message });
