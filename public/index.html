@@ -238,14 +238,14 @@
             <canvas id="elevationCanvas" style="display:none;"></canvas>
         </div>
 
-        <button class="btn btn-primary" onclick="shareGPX()">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
-                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+        <button class="btn btn-primary" onclick="getGPX()">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
             </svg>
-            Share GPX file
+            Get GPX file
         </button>
-        <button class="btn btn-secondary" onclick="downloadGPX()">Save GPX to Downloads</button>
         <div class="btn-row" style="margin-top:8px;">
             <button class="btn btn-secondary" onclick="reverseRoute()">↩ Reverse</button>
             <button class="btn btn-whatsapp" onclick="shareWhatsApp()">
@@ -256,7 +256,7 @@
     </div>
 
     <div class="tip" id="tip" style="display:none;">
-        <strong>Tip:</strong> "Share GPX" opens your phone's share sheet — pick Wahoo, Garmin Connect, or any GPS app. "Save to Downloads" lets you import it manually.
+        <strong>Next:</strong> Open the downloaded GPX file from your notifications or file manager, then choose your bike computer app (Wahoo, Garmin Connect, etc.) to import the route.
     </div>
 
     <!-- Recent routes -->
@@ -617,28 +617,33 @@ function reverseRoute() {
     showStatus('Route reversed!', 'success');
 }
 
-// ─── Download / Share ───
-function downloadGPX() {
-    if (!gpxContent) return;
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([gpxContent], { type: 'application/gpx+xml' }));
-    a.download = gpxFilename;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-}
-
-async function shareGPX() {
+// ─── Get GPX: tries share sheet first, falls back to download ───
+async function getGPX() {
     if (!gpxContent) return;
     updateGPX();
+
+    // Try Web Share API with file (works on iOS Safari, some Android browsers)
     if (navigator.share && navigator.canShare) {
         for (const mime of ['application/gpx+xml','application/xml','application/octet-stream','text/xml']) {
             try {
                 const file = new File([gpxContent], gpxFilename, { type: mime });
-                if (navigator.canShare({ files: [file] })) { await navigator.share({ files: [file] }); return; }
-            } catch (err) { if (err.name === 'AbortError') return; }
+                if (navigator.canShare({ files: [file] })) {
+                    await navigator.share({ files: [file] });
+                    showStatus('GPX shared — import it in your bike computer app.', 'success');
+                    return;
+                }
+            } catch (err) {
+                if (err.name === 'AbortError') return; // user cancelled
+            }
         }
     }
-    downloadGPX();
-    showStatus('File saved to Downloads. Open it from your file manager → choose your bike computer app.', 'success');
+
+    // Fallback: direct download
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([gpxContent], { type: 'application/gpx+xml' }));
+    a.download = gpxFilename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    showStatus('GPX saved to Downloads — open it and choose your bike computer app.', 'success');
 }
 
 function shareWhatsApp() {
