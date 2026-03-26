@@ -311,23 +311,66 @@ async function resolveShortUrl(url) {
 
 function parseGoogleMapsUrl(url) {
     url = url.trim();
+
+    // Try /maps/dir/ format
     let m = url.match(/\/maps\/dir\/(.+?)(?:\/@|\/data=|\?|$)/);
     if (m) {
-        const parts = m[1].split('/').filter(p => p.length > 0);
-        if (parts.length >= 2) return {
-            origin: decodeURIComponent(parts[0].replace(/\+/g, ' ')),
-            destination: decodeURIComponent(parts[parts.length - 1].replace(/\+/g, ' ')),
-            waypoints: parts.slice(1, -1).map(p => decodeURIComponent(p.replace(/\+/g, ' ')))
+        const names = m[1].split('/').filter(p => p.length > 0)
+            .map(p => decodeURIComponent(p.replace(/\+/g, ' ')));
+
+        // Try to extract coordinates from the data= section
+        // Format: !3dLAT!4dLNG pairs for each waypoint
+        const coords = [];
+        const dataMatch = url.match(/\/data=(.+?)(?:\?|$)/);
+        if (dataMatch) {
+            const data = dataMatch[1];
+            const latMatches = [...data.matchAll(/!3d(-?[\d.]+)/g)];
+            const lngMatches = [...data.matchAll(/!4d(-?[\d.]+)/g)];
+            const count = Math.min(latMatches.length, lngMatches.length);
+            for (let i = 0; i < count; i++) {
+                coords.push(`${latMatches[i][1]},${lngMatches[i][1]}`);
+            }
+        }
+
+        if (coords.length >= 2) {
+            // Use coordinates for accuracy, names for display
+            return {
+                origin: coords[0],
+                destination: coords[coords.length - 1],
+                waypoints: coords.slice(1, -1),
+                originName: names[0] || coords[0],
+                destName: names[names.length - 1] || coords[coords.length - 1]
+            };
+        }
+
+        // Fallback to place names if no coords found
+        if (names.length >= 2) return {
+            origin: names[0],
+            destination: names[names.length - 1],
+            waypoints: names.slice(1, -1),
+            originName: names[0],
+            destName: names[names.length - 1]
         };
     }
+
+    // Try query parameter format
     try {
         const u = new URL(url);
         const o = u.searchParams.get('origin') || u.searchParams.get('saddr');
         const d = u.searchParams.get('destination') || u.searchParams.get('daddr');
-        if (o && d) { const w = u.searchParams.get('waypoints'); return { origin: o, destination: d, waypoints: w ? w.split('|').filter(Boolean) : [] }; }
+        if (o && d) {
+            const w = u.searchParams.get('waypoints');
+            return { origin: o, destination: d, waypoints: w ? w.split('|').filter(Boolean) : [], originName: o, destName: d };
+        }
     } catch (e) {}
+
+    // Simple fallback
     m = url.match(/\/dir\/([^/]+)\/([^/@]+)/);
-    if (m) return { origin: decodeURIComponent(m[1].replace(/\+/g,' ')), destination: decodeURIComponent(m[2].replace(/\+/g,' ')), waypoints: [] };
+    if (m) {
+        const o = decodeURIComponent(m[1].replace(/\+/g,' '));
+        const d = decodeURIComponent(m[2].replace(/\+/g,' '));
+        return { origin: o, destination: d, waypoints: [], originName: o, destName: d };
+    }
     return null;
 }
 
@@ -471,7 +514,7 @@ async function convert() {
         convertBtn.disabled = false; return;
     }
 
-    showStatus(`Fetching route: ${parsed.origin} → ${parsed.destination}...`, 'loading');
+    showStatus(`Fetching route: ${parsed.originName || parsed.origin} → ${parsed.destName || parsed.destination}...`, 'loading');
 
     try {
         const routeData = await getRoute(parsed);
@@ -483,8 +526,8 @@ async function convert() {
         currentRoute = routeData;
         currentElevations = null;
 
-        const originShort = parsed.origin.split(',')[0].substring(0, 25).replace(/[^a-zA-Z0-9 ]/g, '').trim();
-        const destShort = parsed.destination.split(',')[0].substring(0, 25).replace(/[^a-zA-Z0-9 ]/g, '').trim();
+        const originShort = (parsed.originName || parsed.origin).split(',')[0].substring(0, 25).replace(/[^a-zA-Z0-9 ]/g, '').trim();
+        const destShort = (parsed.destName || parsed.destination).split(',')[0].substring(0, 25).replace(/[^a-zA-Z0-9 ]/g, '').trim();
         const defaultName = `${originShort} to ${destShort}`;
         document.getElementById('routeName').value = defaultName;
 
